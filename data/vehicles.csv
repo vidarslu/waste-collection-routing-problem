@@ -1,0 +1,4 @@
+id,capacity,max_shift,startup_cost
+V1,10,240,15
+V2,8,220,15
+V3,12,260,15

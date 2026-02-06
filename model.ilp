@@ -1,6 +1,6 @@
 \ Model Waste_Collection_Routing_copy
 \ LP format - for model browsing. Use MPS format to capture full model detail.
-\ Signature: 0x44344f7c61745545
+\ Signature: 0xafec7074d34c4893
 Minimize
  
 Subject To
@@ -9,48 +9,60 @@ Subject To
    = 1
  FlowCustomers[V1,N2]: x[V1,N1,N2] - x[V1,N2,N3] + x[V1,N3,N2]
    - x[V1,N2,N4] - x[V1,N2,N1] + x[V1,N4,N2] = 0
- FlowCustomers[V1,N3]: x[V1,N1,N3] + x[V1,N2,N3] - x[V1,N3,N2]
-   - x[V1,N3,N4] - x[V1,N3,N1] + x[V1,N4,N3] = 0
- FlowCustomers[V2,N2]: x[V2,N1,N2] - x[V2,N2,N3] + x[V2,N3,N2]
-   - x[V2,N2,N4] - x[V2,N2,N1] + x[V2,N4,N2] = 0
+ FlowCustomers[V2,N3]: x[V2,N1,N3] + x[V2,N2,N3] - x[V2,N3,N2]
+   - x[V2,N3,N4] - x[V2,N3,N1] + x[V2,N4,N3] = 0
  FlowCustomers[V3,N2]: x[V3,N1,N2] - x[V3,N2,N3] + x[V3,N3,N2]
    - x[V3,N2,N4] - x[V3,N2,N1] + x[V3,N4,N2] = 0
+ FlowCustomers[V3,N3]: x[V3,N1,N3] + x[V3,N2,N3] - x[V3,N3,N2]
+   - x[V3,N3,N4] - x[V3,N3,N1] + x[V3,N4,N3] = 0
+ StartDepot[V1]: x[V1,N1,N2] + x[V1,N1,N3] - y[V1] = 0
  StartDepot[V2]: x[V2,N1,N2] + x[V2,N1,N3] - y[V2] = 0
- StartDepot[V3]: x[V3,N1,N2] + x[V3,N1,N3] - y[V3] = 0
  EndAtFacility[V1]: x[V1,N2,N4] + x[V1,N3,N4] - y[V1] = 0
+ EndAtFacility[V2]: x[V2,N2,N4] + x[V2,N3,N4] - y[V2] = 0
+ EndAtFacility[V3]: x[V3,N2,N4] + x[V3,N3,N4] - y[V3] = 0
  FacilityToDepot[V1]: x[V1,N4,N1] - y[V1] = 0
  FacilityToDepot[V2]: x[V2,N4,N1] - y[V2] = 0
  FacilityToDepot[V3]: x[V3,N4,N1] - y[V3] = 0
+ NoFacilityExitExceptDepot[V1]: x[V1,N4,N2] + x[V1,N4,N3] = 0
  NoFacilityExitExceptDepot[V2]: x[V2,N4,N2] + x[V2,N4,N3] = 0
  NoFacilityExitExceptDepot[V3]: x[V3,N4,N2] + x[V3,N4,N3] = 0
- NoDepotInExceptFromFacility[V1]: x[V1,N2,N1] + x[V1,N3,N1] = 0
- TimeAtDepotZero[V1]: T[V1,N1] = 0
+ NoDepotInExceptFromFacility[V2]: x[V2,N2,N1] + x[V2,N3,N1] = 0
+ LoadProp_V1_N2_N3: - 10 x[V1,N2,N3] - u[V1,N2] + u[V1,N3] >= -3
+ LoadProp_V1_N3_N2: - 10 x[V1,N3,N2] + u[V1,N2] - u[V1,N3] >= -5
  TimeAtDepotZero[V2]: T[V2,N1] = 0
- TimeAtDepotZero[V3]: T[V3,N1] = 0
- TimeProp_V1_N2_N3: - 1e+06 x[V1,N2,N3] - T[V1,N2] + T[V1,N3] >= -999990
- TimeProp_V1_N3_N2: - 1e+06 x[V1,N3,N2] + T[V1,N2] - T[V1,N3] >= -999988
+ TimeProp_V1_N1_N3: - 1e+06 x[V1,N1,N3] - T[V1,N1] + T[V1,N3] >= -999985
+ TimeProp_V1_N3_N4: - 1e+06 x[V1,N3,N4] - T[V1,N3] + T[V1,N4] >= -999985
  TimeProp_V1_N4_N1: - 1e+06 x[V1,N4,N1] + T[V1,N1] - T[V1,N4] >= -999980
  TimeProp_V2_N2_N3: - 1e+06 x[V2,N2,N3] - T[V2,N2] + T[V2,N3] >= -999990
  TimeProp_V2_N3_N2: - 1e+06 x[V2,N3,N2] + T[V2,N2] - T[V2,N3] >= -999988
  TimeProp_V2_N4_N1: - 1e+06 x[V2,N4,N1] + T[V2,N1] - T[V2,N4] >= -999980
+ TimeProp_V3_N1_N2: - 1e+06 x[V3,N1,N2] - T[V3,N1] + T[V3,N2] >= -999990
+ TimeProp_V3_N1_N3: - 1e+06 x[V3,N1,N3] - T[V3,N1] + T[V3,N3] >= -999985
  TimeProp_V3_N2_N3: - 1e+06 x[V3,N2,N3] - T[V3,N2] + T[V3,N3] >= -999990
  TimeProp_V3_N3_N2: - 1e+06 x[V3,N3,N2] + T[V3,N2] - T[V3,N3] >= -999988
+ TimeProp_V3_N2_N4: - 1e+06 x[V3,N2,N4] - T[V3,N2] + T[V3,N4] >= -999983
+ TimeProp_V3_N3_N4: - 1e+06 x[V3,N3,N4] - T[V3,N3] + T[V3,N4] >= -999985
  TimeProp_V3_N4_N1: - 1e+06 x[V3,N4,N1] + T[V3,N1] - T[V3,N4] >= -999980
+ TimeProp_V3_N2_N1: - 1e+06 x[V3,N2,N1] + T[V3,N1] - T[V3,N2] >= -999985
+ TimeProp_V3_N3_N1: - 1e+06 x[V3,N3,N1] + T[V3,N1] - T[V3,N3] >= -999978
 Bounds
+ u[V1,N2] free
+ u[V1,N3] free
  T[V1,N1] free
- T[V1,N2] free
  T[V1,N3] free
+ T[V1,N4] free
  T[V2,N1] free
  T[V2,N2] free
  T[V2,N3] free
  T[V3,N1] free
  T[V3,N2] free
  T[V3,N3] free
+ T[V3,N4] free
 Binaries
  x[V1,N1,N2] x[V1,N1,N3] x[V1,N2,N3] x[V1,N3,N2] x[V1,N2,N4] x[V1,N3,N4]
- x[V1,N4,N1] x[V1,N2,N1] x[V1,N3,N1] x[V1,N4,N2] x[V1,N4,N3] x[V2,N1,N2]
- x[V2,N1,N3] x[V2,N2,N3] x[V2,N3,N2] x[V2,N2,N4] x[V2,N4,N1] x[V2,N2,N1]
- x[V2,N4,N2] x[V2,N4,N3] x[V3,N1,N2] x[V3,N1,N3] x[V3,N2,N3] x[V3,N3,N2]
- x[V3,N2,N4] x[V3,N4,N1] x[V3,N2,N1] x[V3,N4,N2] x[V3,N4,N3] y[V1] y[V2]
- y[V3]
+ x[V1,N4,N1] x[V1,N2,N1] x[V1,N4,N2] x[V1,N4,N3] x[V2,N1,N2] x[V2,N1,N3]
+ x[V2,N2,N3] x[V2,N3,N2] x[V2,N2,N4] x[V2,N3,N4] x[V2,N4,N1] x[V2,N2,N1]
+ x[V2,N3,N1] x[V2,N4,N2] x[V2,N4,N3] x[V3,N1,N2] x[V3,N1,N3] x[V3,N2,N3]
+ x[V3,N3,N2] x[V3,N2,N4] x[V3,N3,N4] x[V3,N4,N1] x[V3,N2,N1] x[V3,N3,N1]
+ x[V3,N4,N2] x[V3,N4,N3] y[V1] y[V2] y[V3]
 End

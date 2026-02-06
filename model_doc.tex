@@ -1,0 +1,121 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Waste Collection Routing Problem (WCRP) Model}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Sets}
+\begin{itemize}
+\item $V$: set of vehicles (indexed by $k$).
+\item $C$: set of customers (indexed by $i,j$).
+\item $D=\{d\}$: depot (single node).
+\item $F=\{f\}$: disposal facility (single node).
+\item $N = D \cup C \cup F$: all nodes.
+\item $A \subseteq N \times N$: directed arcs with $i \neq j$ (complete digraph in the current implementation).
+\end{itemize}
+
+\section*{Parameters}
+\begin{itemize}
+\item $q_i$: demand at customer $i \in C$.
+\item $s_i$: service time at node $i \in N$ (zero for depot/facility in the code).
+\item $c_{ij}$: travel cost on arc $(i,j) \in A$.
+\item $t_{ij}$: travel time on arc $(i,j) \in A$.
+\item $Q_k$: capacity of vehicle $k \in V$.
+\item $T_k$: maximum shift duration for vehicle $k \in V$.
+\item $f_k$: fixed startup cost for using vehicle $k \in V$.
+\end{itemize}
+
+\section*{Decision Variables}
+\begin{itemize}
+\item $x_{ijk} \in \{0,1\}$: 1 if vehicle $k$ traverses arc $(i,j)$, 0 otherwise.
+\item $y_k \in \{0,1\}$: 1 if vehicle $k$ is used, 0 otherwise.
+\item $u_{ik} \ge 0$: load on vehicle $k$ immediately after servicing customer $i \in C$.
+\end{itemize}
+
+\section*{Objective}
+Minimize total travel cost plus vehicle startup costs:
+\[
+\min \sum_{k \in V} \sum_{(i,j) \in A} c_{ij}\, x_{ijk}
+     + \sum_{k \in V} f_k\, y_k
+\]
+
+\section*{Constraints}
+
+\paragraph{Customer visit (exactly once).}
+\[
+\sum_{k \in V} \sum_{j \in N:(i,j)\in A} x_{ijk} = 1 \quad \forall i \in C
+\]
+\[
+\sum_{k \in V} \sum_{j \in N:(j,i)\in A} x_{jik} = 1 \quad \forall i \in C
+\]
+
+\paragraph{Depot start/end for each vehicle.}
+\[
+\sum_{j \in N:(d,j)\in A} x_{djk} = y_k \quad \forall k \in V
+\]
+\[
+\sum_{i \in N:(i,d)\in A} x_{idk} = y_k \quad \forall k \in V
+\]
+
+\paragraph{Use-linking.}
+If a vehicle serves any customer, it must be active:
+\[
+\sum_{j \in N:(i,j)\in A} x_{ijk} \le y_k \quad \forall i \in C,\ \forall k \in V
+\]
+
+\paragraph{Flow conservation (customers and facility).}
+\[
+\sum_{j \in N:(n,j)\in A} x_{njk} = \sum_{i \in N:(i,n)\in A} x_{ink}
+\quad \forall n \in C \cup F,\ \forall k \in V
+\]
+
+\paragraph{Facility visit.}
+Each used vehicle must enter the disposal facility at least once:
+\[
+\sum_{i \in N:(i,f)\in A} x_{ifk} \ge y_k \quad \forall k \in V
+\]
+
+\paragraph{No direct customer-to-depot return.}
+\[
+x_{idk} = 0 \quad \forall i \in C,\ \forall k \in V
+\]
+
+\paragraph{Load bounds at customers.}
+\[
+u_{ik} \le Q_k \sum_{j \in N:(j,i)\in A} x_{jik} \quad \forall i \in C,\ \forall k \in V
+\]
+\[
+u_{ik} \ge q_i \sum_{j \in N:(j,i)\in A} x_{jik} \quad \forall i \in C,\ \forall k \in V
+\]
+
+\paragraph{Load initialization from depot/facility to customer.}
+For $j \in C$ and $i \in \{d,f\}$:
+\[
+u_{jk} \ge q_j - Q_k(1 - x_{ijk}) \quad \forall j \in C,\ \forall k \in V
+\]
+
+\paragraph{Load propagation between customers.}
+\[
+u_{jk} \ge u_{ik} + q_j - Q_k(1 - x_{ijk})
+\quad \forall i \in C,\ \forall j \in C,\ \forall k \in V
+\]
+
+\paragraph{Shift duration (travel + service).}
+\[
+\sum_{(i,j)\in A} (t_{ij} + s_i)\, x_{ijk} \le T_k \quad \forall k \in V
+\]
+
+\section*{Notes}
+\begin{itemize}
+\item The current implementation builds a complete directed graph $A$ from Euclidean distances between node coordinates, then rounds to integers for $c_{ij}$ and scales for $t_{ij}$.
+\item Service times for depot and disposal facility are effectively zero.
+\end{itemize}
+
+\end{document}
