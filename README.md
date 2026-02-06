@@ -1,4 +1,7 @@
-# Renovision
+# Waste Collection Routing Optimization
+
+This repository works on a model to optimize real-world garbage collection operations. The time horizon is operational, and the objective is cost reduction.
+
 
 Waste collection routing prototype. This repository contains a Gurobi-based optimization model, data schemas, and helper utilities to ingest CSVs, build an instance, solve, and visualize routes.
 
