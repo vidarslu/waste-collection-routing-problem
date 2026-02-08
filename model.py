@@ -55,6 +55,103 @@ depot = D[0]
 facility = F[0]
 
 # -----------------------------
+# Simple greedy heuristic
+# -----------------------------
+def build_greedy_solution(
+    V,
+    C,
+    depot,
+    facility,
+    demand,
+    travel_costs,
+    travel_times,
+    service,
+    vehicle_capacities,
+    max_shift_duration_vehicles,
+):
+    unserved = set(C)
+    routes = {k: [] for k in V}
+
+    for k in V:
+        if not unserved:
+            break
+
+        cap = vehicle_capacities[k]
+        max_shift = max_shift_duration_vehicles[k]
+
+        route = [depot]
+        cur = depot
+        load = 0
+        time = 0
+
+        while True:
+            candidates = []
+            for c in unserved:
+                if load + demand[c] > cap:
+                    continue
+                if (cur, c) not in travel_times:
+                    continue
+                if (c, facility) not in travel_times or (facility, depot) not in travel_times:
+                    continue
+
+                leg_time = travel_times[cur, c] + service[cur]
+                finish_time = (
+                    time
+                    + leg_time
+                    + travel_times[c, facility]
+                    + service[c]
+                    + travel_times[facility, depot]
+                )
+                if finish_time <= max_shift:
+                    candidates.append(c)
+
+            if not candidates:
+                break
+
+            next_c = min(candidates, key=lambda c: travel_costs[cur, c])
+            route.append(next_c)
+            time += travel_times[cur, next_c] + service[cur]
+            load += demand[next_c]
+            unserved.remove(next_c)
+            cur = next_c
+
+        if len(route) > 1:
+            route.append(facility)
+            time += travel_times[cur, facility] + service[cur]
+            cur = facility
+            route.append(depot)
+            time += travel_times[cur, depot] + service[cur]
+            routes[k] = route
+
+    return {
+        "routes": routes,
+        "unserved": sorted(unserved),
+    }
+
+
+HEURISTIC_WARM_START = True
+heuristic = None
+if HEURISTIC_WARM_START:
+    heuristic = build_greedy_solution(
+        V,
+        C,
+        depot,
+        facility,
+        demand,
+        travel_costs,
+        travel_times,
+        service,
+        vehicle_capacities,
+        max_shift_duration_vehicles,
+    )
+USE_MIP_START = (
+    HEURISTIC_WARM_START
+    and heuristic is not None
+    and not heuristic["unserved"]
+    and any(heuristic["routes"].values())
+)
+
+# -----------------------------
 # Model
 # -----------------------------
 m = gp.Model("Waste_Collection_Routing")
@@ -73,6 +170,24 @@ for param, value in SOLVER_CONFIG.items():
 x = m.addVars(A, V, vtype=GRB.BINARY, name="x")          # 1 if vehicle k uses arc (i, j)
 y = m.addVars(V, vtype=GRB.BINARY, name="y")             # 1 if vehicle k is used
 u = m.addVars(C, V, lb=0.0, name="u")                    # load after servicing customer i
+
+# Optional warm start from heuristic routes (only if complete)
+if USE_MIP_START:
+    for k, route in heuristic["routes"].items():
+        if not route:
+            continue
+        y[k].Start = 1.0
+        load = 0.0
+        for i in range(len(route) - 1):
+            a = route[i]
+            b = route[i + 1]
+            if (a, b) in travel_costs:
+                x[a, b, k].Start = 1.0
+            if b in C:
+                load += demand[b]
+                u[b, k].Start = load
+elif HEURISTIC_WARM_START:
+    print("Heuristic did not cover all customers; skipping MIP start.")
 
 # Objective: minimize total travel cost
 m.setObjective(
@@ -271,3 +386,19 @@ if m.SolCount > 0:
     plt.show()
 else:
     print("No feasible solution available to visualize.")
+    if heuristic is not None and any(heuristic["routes"].values()):
+        print("\nHeuristic fallback (greedy):")
+        for k, route in heuristic["routes"].items():
+            if not route:
+                continue
+            customers_served = [n for n in route if n in C]
+            arcs = list(zip(route[:-1], route[1:]))
+            total_cost = sum(travel_costs[i, j] for (i, j) in arcs) + vehicle_startup_costs[k]
+            total_time = sum(travel_times[i, j] + service[i] for (i, j) in arcs)
+            print(f"- {k}:")
+            print(f"  Route: {' -> '.join(route)}")
+            print(f"  Customers: {', '.join(customers_served) if customers_served else 'None'}")
+            print(f"  Cost: {total_cost}")
+            print(f"  Time: {total_time}")
+        if heuristic["unserved"]:
+            print(f"Unserved customers: {', '.join(heuristic['unserved'])}")
