@@ -12,16 +12,47 @@ from data_io import (
     load_facilities_csv,
     load_vehicles_csv,
 )
+from distance_matrix import load_matrix_cache, osrm_table_matrices, save_matrix_cache
 from instance_builder import build_instance
 
 # -----------------------------
 # Data
 # -----------------------------
 DATA_DIR = Path("data")
+USE_ROAD_DISTANCES = False
+OSRM_PROFILE = "driving"
+OSRM_BASE_URL = "http://router.project-osrm.org"
+OSRM_USER_AGENT = "RenovisionOSRM/0.1 (contact@example.com)"
+ROAD_MATRIX_CACHE = DATA_DIR / "road_matrix.json"
 customers = load_customers_csv(DATA_DIR / "customers.csv")
 vehicles = load_vehicles_csv(DATA_DIR / "vehicles.csv")
 depots = load_depots_csv(DATA_DIR / "depots.csv")
 facilities = load_facilities_csv(DATA_DIR / "facilities.csv")
+
+DISTANCE_MODE = "euclidean"  # "haversine_km" for real latitude/longitude
+distance_matrix = None
+time_matrix = None
+if USE_ROAD_DISTANCES:
+    if len(depots) != 1 or len(facilities) != 1:
+        raise ValueError("Road distance matrix currently supports exactly one depot and one facility.")
+    node_order = [depots[0].id] + [c.id for c in customers] + [facilities[0].id]
+    node_positions = {depots[0].id: (depots[0].lat, depots[0].lon)}
+    node_positions[facilities[0].id] = (facilities[0].lat, facilities[0].lon)
+    for c in customers:
+        node_positions[c.id] = (c.lat, c.lon)
+
+    cached = load_matrix_cache(ROAD_MATRIX_CACHE, node_order)
+    if cached is None:
+        distance_matrix, time_matrix = osrm_table_matrices(
+            node_positions,
+            node_order=node_order,
+            profile=OSRM_PROFILE,
+            base_url=OSRM_BASE_URL,
+            user_agent=OSRM_USER_AGENT,
+        )
+        save_matrix_cache(ROAD_MATRIX_CACHE, node_order, distance_matrix, time_matrix)
+    else:
+        distance_matrix, time_matrix = cached
 
 instance = build_instance(
     vehicles,
@@ -30,6 +61,9 @@ instance = build_instance(
     facilities,
     cost_per_unit=1.0,
     time_per_unit=3.0,
+    distance_mode=DISTANCE_MODE,
+    distance_matrix=distance_matrix,
+    time_matrix=time_matrix,
 )
 
 V = instance["V"]      # Vehicles

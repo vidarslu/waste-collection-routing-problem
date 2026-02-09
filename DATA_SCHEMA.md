@@ -7,6 +7,8 @@ Required columns:
 - `lon` (float): Longitude or y-coordinate.
 - `demand` (int): Demand units to collect.
 - `service` (int): Service time at customer.
+Optional columns:
+- `address` (string): Full street address for geocoding (used to populate `lat`/`lon`).
 
 ## vehicles.csv
 Required columns:
@@ -22,9 +24,13 @@ Required columns:
 - `id` (string): Depot ID.
 - `lat` (float): Latitude or x-coordinate.
 - `lon` (float): Longitude or y-coordinate.
+Optional columns:
+- `address` (string): Full street address for geocoding (used to populate `lat`/`lon`).
 
 ## facilities.csv
 Required columns:
 - `id` (string): Disposal facility ID.
 - `lat` (float): Latitude or x-coordinate.
 - `lon` (float): Longitude or y-coordinate.
+Optional columns:
+- `address` (string): Full street address for geocoding (used to populate `lat`/`lon`).
