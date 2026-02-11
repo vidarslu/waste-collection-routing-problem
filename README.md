@@ -53,3 +53,15 @@ For actual road distances and drive times, the project can query OSRM's public d
 Notes:
 - The OSRM public server is intended for small demos; for production, run your own OSRM instance or use a managed routing provider.
 - The road time matrix is in minutes; keep your `max_shift` and `service` units consistent.
+
+## Map Output + Directions
+To visualize routes on a real map and save driving directions:
+
+1. Ensure `lat`/`lon` are real coordinates and set `USE_ROAD_DISTANCES = True` (optional but recommended).
+2. In `model.py`, keep `EXPORT_ROUTES = True` and set `OSRM_ROUTE_USER_AGENT` to your contact.
+3. Run `python model.py`.
+
+Outputs:
+- `data/routes.geojson`: GeoJSON with route lines and stop points.
+- `data/directions.json`: Step-by-step OSRM directions per vehicle and leg.
+- `data/routes_map.html`: A Leaflet map you can open in a browser to view the exact driving routes.

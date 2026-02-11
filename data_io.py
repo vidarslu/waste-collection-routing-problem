@@ -5,7 +5,17 @@ from entities import Customer, Depot, DisposalFacility, Vehicle
 
 
 def _require_fields(row, required, path):
-    missing = [f for f in required if f not in row or row[f] == ""]
+    missing = []
+    for f in required:
+        if f not in row:
+            missing.append(f)
+            continue
+        value = row[f]
+        if value is None:
+            missing.append(f)
+            continue
+        if str(value).strip() == "":
+            missing.append(f)
     if missing:
         raise ValueError(f"Missing fields {missing} in {path}")
 
