@@ -26,3 +26,42 @@ python model.py
 ## Notes
 - The current model assumes exactly one depot and one disposal facility.
 - Travel costs/times are derived from Euclidean distances between coordinates (placeholder for map APIs).
+
+## Real Locations (Addresses -> Lat/Lon)
+If you have real addresses, geocode them into `lat`/`lon` and switch to great-circle distances.
+
+1. Add an `address` column (and optionally other address parts) to `data/customers.csv`, `data/depots.csv`, and `data/facilities.csv`.
+2. Run the geocoder to fill missing `lat`/`lon`:
+
+```bash
+python geocode_csv.py --input data/customers.csv --output data/customers_geocoded.csv --address-fields address --user-agent "YourApp/1.0 (you@example.com)"
+python geocode_csv.py --input data/depots.csv --output data/depots_geocoded.csv --address-fields address --user-agent "YourApp/1.0 (you@example.com)"
+python geocode_csv.py --input data/facilities.csv --output data/facilities_geocoded.csv --address-fields address --user-agent "YourApp/1.0 (you@example.com)"
+```
+
+3. Point `model.py` (or your own runner) at the geocoded files and set `DISTANCE_MODE = "haversine_km"`.
+
+The geocoder uses OpenStreetMap Nominatim, respects a pause between calls, and writes a cache file to avoid repeat lookups.
+
+## Road Distances (OSM / OSRM)
+For actual road distances and drive times, the project can query OSRM's public demo server (OpenStreetMap data) to build a distance/time matrix.
+
+1. Ensure your CSVs have valid `lat`/`lon`.
+2. In `model.py`, set `USE_ROAD_DISTANCES = True` and update `OSRM_USER_AGENT` with your contact.
+3. Run `python model.py` to fetch and cache the matrix at `data/road_matrix.json`.
+
+Notes:
+- The OSRM public server is intended for small demos; for production, run your own OSRM instance or use a managed routing provider.
+- The road time matrix is in minutes; keep your `max_shift` and `service` units consistent.
+
+## Map Output + Directions
+To visualize routes on a real map and save driving directions:
+
+1. Ensure `lat`/`lon` are real coordinates and set `USE_ROAD_DISTANCES = True` (optional but recommended).
+2. In `model.py`, keep `EXPORT_ROUTES = True` and set `OSRM_ROUTE_USER_AGENT` to your contact.
+3. Run `python model.py`.
+
+Outputs:
+- `data/routes.geojson`: GeoJSON with route lines and stop points.
+- `data/directions.json`: Step-by-step OSRM directions per vehicle and leg.
+- `data/routes_map.html`: A Leaflet map you can open in a browser to view the exact driving routes.

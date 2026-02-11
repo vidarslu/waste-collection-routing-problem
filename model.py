@@ -12,16 +12,57 @@ from data_io import (
     load_facilities_csv,
     load_vehicles_csv,
 )
+from distance_matrix import load_matrix_cache, osrm_table_matrices, save_matrix_cache
 from instance_builder import build_instance
+from route_export import export_routes_geojson, write_map_html
 
 # -----------------------------
 # Data
 # -----------------------------
 DATA_DIR = Path("data")
+USE_ROAD_DISTANCES = True
+OSRM_PROFILE = "driving"
+OSRM_BASE_URL = "http://router.project-osrm.org"
+OSRM_USER_AGENT = "RenovisionOSRM/0.1 (contact@example.com)"
+ROAD_MATRIX_CACHE = DATA_DIR / "road_matrix.json"
+EXPORT_ROUTES = True
+EXPORT_ROUTE_GEOJSON = DATA_DIR / "routes.geojson"
+EXPORT_DIRECTIONS_JSON = DATA_DIR / "directions.json"
+EXPORT_ROUTE_HTML = DATA_DIR / "routes_map.html"
+OSRM_ROUTE_PROFILE = "driving"
+OSRM_ROUTE_BASE_URL = OSRM_BASE_URL
+OSRM_ROUTE_USER_AGENT = OSRM_USER_AGENT
+OSRM_ROUTE_TIMEOUT_S = 30
+OSRM_ROUTE_PAUSE_S = 0.2
 customers = load_customers_csv(DATA_DIR / "customers.csv")
 vehicles = load_vehicles_csv(DATA_DIR / "vehicles.csv")
 depots = load_depots_csv(DATA_DIR / "depots.csv")
 facilities = load_facilities_csv(DATA_DIR / "facilities.csv")
+
+DISTANCE_MODE = "euclidean"  # "haversine_km" for real latitude/longitude
+distance_matrix = None
+time_matrix = None
+if USE_ROAD_DISTANCES:
+    if len(depots) != 1 or len(facilities) != 1:
+        raise ValueError("Road distance matrix currently supports exactly one depot and one facility.")
+    node_order = [depots[0].id] + [c.id for c in customers] + [facilities[0].id]
+    node_positions = {depots[0].id: (depots[0].lat, depots[0].lon)}
+    node_positions[facilities[0].id] = (facilities[0].lat, facilities[0].lon)
+    for c in customers:
+        node_positions[c.id] = (c.lat, c.lon)
+
+    cached = load_matrix_cache(ROAD_MATRIX_CACHE, node_order)
+    if cached is None:
+        distance_matrix, time_matrix = osrm_table_matrices(
+            node_positions,
+            node_order=node_order,
+            profile=OSRM_PROFILE,
+            base_url=OSRM_BASE_URL,
+            user_agent=OSRM_USER_AGENT,
+        )
+        save_matrix_cache(ROAD_MATRIX_CACHE, node_order, distance_matrix, time_matrix)
+    else:
+        distance_matrix, time_matrix = cached
 
 instance = build_instance(
     vehicles,
@@ -30,6 +71,9 @@ instance = build_instance(
     facilities,
     cost_per_unit=1.0,
     time_per_unit=3.0,
+    distance_mode=DISTANCE_MODE,
+    distance_matrix=distance_matrix,
+    time_matrix=time_matrix,
 )
 
 V = instance["V"]      # Vehicles
@@ -53,6 +97,13 @@ demand = {i: demands.get(i, 0) for i in N}
 service = {i: service_times.get(i, 0) for i in N}
 depot = D[0]
 facility = F[0]
+
+max_vehicle_capacity = max(vehicle_capacities.values())
+for c in C:
+    if demand[c] > max_vehicle_capacity:
+        raise ValueError(
+            f"Customer {c} demand {demand[c]} exceeds max vehicle capacity {max_vehicle_capacity}."
+        )
 
 # -----------------------------
 # Simple greedy heuristic
@@ -289,37 +340,81 @@ m.optimize()
 # -----------------------------
 # Output summary
 # -----------------------------
-def _extract_route(selected_arcs, start, max_steps):
-    next_map = {i: j for (i, j) in selected_arcs}
-    route = [start]
-    cur = start
-    for _ in range(max_steps):
-        if cur not in next_map:
-            break
-        nxt = next_map[cur]
-        route.append(nxt)
-        cur = nxt
-        if cur == start:
-            break
+def _extract_route(selected_arcs, start):
+    adj = {}
+    for i, j in selected_arcs:
+        adj.setdefault(i, []).append(j)
+    for i in adj:
+        adj[i].sort(reverse=True)
+
+    stack = [start]
+    route = []
+    while stack:
+        v = stack[-1]
+        if adj.get(v):
+            stack.append(adj[v].pop())
+        else:
+            route.append(stack.pop())
+    route.reverse()
     return route
+
+
+def _route_max_load(route, demand, facility, depot):
+    load = 0
+    max_load = 0
+    for node in route:
+        if node == depot:
+            continue
+        if node == facility:
+            load = 0
+            continue
+        load += demand.get(node, 0)
+        if load > max_load:
+            max_load = load
+    return max_load
 
 
 if m.SolCount > 0:
     print("\nRoute summary:")
+    routes_by_vehicle = {}
     for k in V:
         if y[k].X < 0.5:
             continue
         arcs_k = [(i, j) for (i, j) in A if x[i, j, k].X > 0.5]
-        route = _extract_route(arcs_k, depot, max_steps=len(N) + 5)
+        route = _extract_route(arcs_k, depot)
+        if len(route) > 1:
+            routes_by_vehicle[k] = route
         customers_served = [n for n in route if n in C]
         total_cost = sum(travel_costs[i, j] for (i, j) in arcs_k) + vehicle_startup_costs[k]
         total_time = sum(travel_times[i, j] + service[i] for (i, j) in arcs_k)
+        max_load = _route_max_load(route, demand, facility, depot)
+        total_demand = sum(demand[n] for n in customers_served)
 
         print(f"- {k}:")
         print(f"  Route: {' -> '.join(route)}")
         print(f"  Customers: {', '.join(customers_served) if customers_served else 'None'}")
         print(f"  Cost: {total_cost}")
         print(f"  Time: {total_time}")
+        print(f"  Load: {max_load}/{vehicle_capacities[k]} (total demand {total_demand})")
+
+    if EXPORT_ROUTES and routes_by_vehicle:
+        geojson, directions = export_routes_geojson(
+            routes_by_vehicle,
+            node_positions,
+            output_geojson_path=EXPORT_ROUTE_GEOJSON,
+            output_directions_path=EXPORT_DIRECTIONS_JSON,
+            depot_id=depot,
+            facility_id=facility,
+            profile=OSRM_ROUTE_PROFILE,
+            base_url=OSRM_ROUTE_BASE_URL,
+            user_agent=OSRM_ROUTE_USER_AGENT,
+            timeout_s=OSRM_ROUTE_TIMEOUT_S,
+            pause_s=OSRM_ROUTE_PAUSE_S,
+        )
+        write_map_html(geojson, EXPORT_ROUTE_HTML, directions=directions)
+        print(f"\nWrote map data: {EXPORT_ROUTE_GEOJSON}")
+        print(f"Wrote directions: {EXPORT_DIRECTIONS_JSON}")
+        print(f"Wrote map HTML: {EXPORT_ROUTE_HTML}")
 
 # -----------------------------
 # Visualization
@@ -395,10 +490,13 @@ else:
             arcs = list(zip(route[:-1], route[1:]))
             total_cost = sum(travel_costs[i, j] for (i, j) in arcs) + vehicle_startup_costs[k]
             total_time = sum(travel_times[i, j] + service[i] for (i, j) in arcs)
+            max_load = _route_max_load(route, demand, facility, depot)
+            total_demand = sum(demand[n] for n in customers_served)
             print(f"- {k}:")
             print(f"  Route: {' -> '.join(route)}")
             print(f"  Customers: {', '.join(customers_served) if customers_served else 'None'}")
             print(f"  Cost: {total_cost}")
             print(f"  Time: {total_time}")
+            print(f"  Load: {max_load}/{vehicle_capacities[k]} (total demand {total_demand})")
         if heuristic["unserved"]:
             print(f"Unserved customers: {', '.join(heuristic['unserved'])}")
